@@ -27,8 +27,8 @@ namespace FluentValidation.Internal {
 	using Results;
 	using Validators;
 
-	internal abstract class RuleBase<T, TProperty, TValue> : IValidationRule<T, TValue> {
-		private readonly List<RuleComponent<T,TValue>> _components = new();
+	internal abstract class RuleBase<T, TProperty, TValue> : IValidationRule<T, TValue>, IValidationRuleConfigurable<T,TValue> {
+		private readonly List<RuleComponent<T, TValue>> _components = new();
 		private Func<CascadeMode> _cascadeModeThunk;
 		private string _propertyDisplayName;
 		private string _propertyName;
@@ -99,7 +99,7 @@ namespace FluentValidation.Internal {
 		/// <summary>
 		/// The current validator being configured by this rule.
 		/// </summary>
-		public RuleComponent<T,TValue> CurrentValidator => _components.LastOrDefault();
+		public RuleComponent<T, TValue> CurrentValidator => _components.LastOrDefault();
 
 		/// <summary>
 		/// The current rule component.
@@ -155,6 +155,8 @@ namespace FluentValidation.Internal {
 			_components.Add(component);
 		}
 
+		IRuleComponent<T, TValue> IValidationRuleConfigurable<T, TValue>.Current => Current;
+
 		// /// <summary>
 		// /// Replaces a validator in this rule. Used to wrap validators.
 		// /// </summary>
@@ -195,7 +197,12 @@ namespace FluentValidation.Internal {
 		/// <summary>
 		/// Allows custom creation of an error message
 		/// </summary>
-		public Func<MessageBuilderContext<T,TValue>, string> MessageBuilder { get; set; }
+		public Func<MessageBuilderContext<T, TValue>, string> MessageBuilder { get; set; }
+
+		//TODO: Make this the default version of MessageBuilder for FV 11.
+		Func<IMessageBuilderContext<T, TValue>, string> IValidationRuleConfigurable<T, TValue>.MessageBuilder {
+			set => MessageBuilder = value;
+		}
 
 		/// <summary>
 		/// Dependent rules
@@ -218,7 +225,7 @@ namespace FluentValidation.Internal {
 		/// </summary>
 		/// <param name="predicate"></param>
 		/// <param name="applyConditionTo"></param>
-		public void ApplyCondition(Func<IValidationContext, bool> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators) {
+		public void ApplyCondition(Func<ValidationContext<T>, bool> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators) {
 			// Default behaviour for When/Unless as of v1.3 is to apply the condition to all previous validators in the chain.
 			if (applyConditionTo == ApplyConditionTo.AllValidators) {
 				foreach (var validator in _components) {
@@ -241,7 +248,7 @@ namespace FluentValidation.Internal {
 		/// </summary>
 		/// <param name="predicate"></param>
 		/// <param name="applyConditionTo"></param>
-		public void ApplyAsyncCondition(Func<IValidationContext, CancellationToken, Task<bool>> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators) {
+		public void ApplyAsyncCondition(Func<ValidationContext<T>, CancellationToken, Task<bool>> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators) {
 			// Default behaviour for When/Unless as of v1.3 is to apply the condition to all previous validators in the chain.
 			if (applyConditionTo == ApplyConditionTo.AllValidators) {
 				foreach (var validator in _components) {
@@ -279,6 +286,8 @@ namespace FluentValidation.Internal {
 			}
 		}
 
+		object IValidationRule<T>.GetPropertyValue(T instance) => PropertyFunc(instance);
+
 		/// <summary>
 		/// Prepares the <see cref="MessageFormatter"/> of <paramref name="context"/> for an upcoming <see cref="ValidationFailure"/>.
 		/// </summary>
@@ -308,22 +317,22 @@ namespace FluentValidation.Internal {
 		/// <param name="value">The property value</param>
 		/// <param name="component">The current rule component.</param>
 		/// <returns>Returns an error validation result.</returns>
-		protected ValidationFailure CreateValidationError(ValidationContext<T> context, TValue value, RuleComponent<T,TValue> component) {
+		protected ValidationFailure CreateValidationError(ValidationContext<T> context, TValue value, RuleComponent<T, TValue> component) {
 			var error = MessageBuilder != null
 				? MessageBuilder(new MessageBuilderContext<T, TValue>(context, value, component))
 				: component.GetErrorMessage(context, value);
 
 			var failure = new ValidationFailure(context.PropertyName, error, value);
-			
+
 			failure.FormattedMessagePlaceholderValues = new Dictionary<string, object>(context.MessageFormatter.PlaceholderValues);
 			failure.ErrorCode = component.ErrorCode ?? ValidatorOptions.Global.ErrorCodeResolver(component.Validator);
 
+			failure.Severity = component.SeverityProvider != null
+				? component.SeverityProvider(context, value)
+				: ValidatorOptions.Global.Severity;
+
 			if (component.CustomStateProvider != null) {
 				failure.CustomState = component.CustomStateProvider(context, value);
-			}
-
-			if (component.SeverityProvider != null) {
-				failure.Severity = component.SeverityProvider(context, value);
 			}
 
 			return failure;
