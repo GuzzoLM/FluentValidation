@@ -1,11 +1,7 @@
 namespace FluentValidation.Tests.AspNetCore {
-	using System;
 	using System.Globalization;
-	using FluentValidation.AspNetCore;
 	using Microsoft.AspNetCore.Builder;
 	using Microsoft.AspNetCore.Localization;
-	using Microsoft.AspNetCore.Mvc;
-	using Microsoft.AspNetCore.Mvc.Infrastructure;
 	using Microsoft.Extensions.DependencyInjection;
 
 	public class Startup {
@@ -29,11 +25,4 @@ namespace FluentValidation.Tests.AspNetCore {
 				});
 		}
 	}
-
-	public static class WebTestExtensions {
-		public static void AddFluentValidationForTesting(this IServiceCollection services, Action<FluentValidationMvcConfiguration> configurator) {
-			services.AddMvc().AddNewtonsoftJson().AddFluentValidation(configurator);
-		}
-	}
-
 }

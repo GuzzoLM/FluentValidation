@@ -27,6 +27,53 @@ namespace FluentValidation {
 	using Results;
 	using Validators;
 
+	//TODO: For FV 11 merge IValidationRuleConfigurable	and IValidationRule<T,Tproperty>
+
+	public interface IValidationRuleConfigurable<T, out TProperty> : IValidationRule<T> {
+		/// <summary>
+		/// Cascade mode for this rule.
+		/// </summary>
+		public CascadeMode CascadeMode { get; set; }
+
+		/// <summary>
+		/// Function that will be invoked if any of the validators associated with this rule fail.
+		/// </summary>
+		public Action<T, IEnumerable<ValidationFailure>> OnFailure { get; set; }
+
+		/// <summary>
+		/// Sets the display name for the property.
+		/// </summary>
+		/// <param name="name">The property's display name</param>
+		void SetDisplayName(string name);
+
+		/// <summary>
+		/// Sets the display name for the property using a function.
+		/// </summary>
+		/// <param name="factory">The function for building the display name</param>
+		void SetDisplayName(Func<ValidationContext<T>, string> factory);
+
+		/// <summary>
+		/// Adds a validator to this rule.
+		/// </summary>
+		void AddValidator(IPropertyValidator<T, TProperty> validator);
+
+		/// <summary>
+		/// Adds an async validator to this rule.
+		/// </summary>
+		/// <param name="asyncValidator">The async property validator to invoke</param>
+		/// <param name="fallback">A synchronous property validator to use as a fallback if executed synchronously. This parameter is optional. If omitted, the async validator will be called synchronously if needed.</param>
+		void AddAsyncValidator(IAsyncPropertyValidator<T, TProperty> asyncValidator, IPropertyValidator<T, TProperty> fallback = null);
+
+		/// <summary>
+		/// The current rule component.
+		/// </summary>
+		IRuleComponent<T,TProperty> Current { get; }
+
+		/// <summary>
+		/// Allows custom creation of an error message
+		/// </summary>
+		public Func<IMessageBuilderContext<T,TProperty>, string> MessageBuilder { set; }
+	}
 
 	public interface IValidationRule<T, TProperty> : IValidationRule<T> {
 		/// <summary>
@@ -78,13 +125,43 @@ namespace FluentValidation {
 	}
 
 	public interface IValidationRule<T> : IValidationRule {
-		void ApplyCondition(Func<IValidationContext, bool> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators);
 
-		void ApplyAsyncCondition(Func<IValidationContext, CancellationToken, Task<bool>> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators);
+		/// <summary>
+		/// Applies a condition to a single rule chain.
+		/// The condition can be applied to either the current property validator in the chain,
+		/// or all preceding property validators in the chain (the default).
+		/// </summary>
+		/// <param name="predicate">The condition to apply</param>
+		/// <param name="applyConditionTo">Whether the condition should be applied to the current property validator in the chain, or all preceding property validators in the chain.</param>
+		void ApplyCondition(Func<ValidationContext<T>, bool> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators);
 
+		/// <summary>
+		/// Applies an async condition to a single rule chain.
+		/// The condition can be applied to either the current property validator in the chain,
+		/// or all preceding property validators in the chain (the default).
+		/// </summary>
+		/// <param name="predicate">The condition to apply</param>
+		/// <param name="applyConditionTo">Whether the condition should be applied to the current property validator in the chain, or all preceding property validators in the chain.</param>
+		void ApplyAsyncCondition(Func<ValidationContext<T>, CancellationToken, Task<bool>> predicate, ApplyConditionTo applyConditionTo = ApplyConditionTo.AllValidators);
+
+		/// <summary>
+		/// Applies a pre-condition to this rule.
+		/// </summary>
+		/// <param name="condition"></param>
 		void ApplySharedCondition(Func<ValidationContext<T>, bool> condition);
 
+		/// <summary>
+		/// Applies an async pre-condition to this rule.
+		/// </summary>
+		/// <param name="condition"></param>
 		void ApplySharedAsyncCondition(Func<ValidationContext<T>, CancellationToken, Task<bool>> condition);
+
+		/// <summary>
+		/// Gets the property value for this rule. Note that this bypasses all conditions.
+		/// </summary>
+		/// <param name="instance">The model from which the property value should be retrieved.</param>
+		/// <returns>The property value.</returns>
+		object GetPropertyValue(T instance);
 	}
 
 	/// <summary>
